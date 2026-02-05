@@ -1,39 +1,131 @@
-name: Build
+name: Build Cutefish Dock AppImage
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
 
 jobs:
-  debian:
-    name: Debian
-    runs-on: ubuntu-latest
-    container: docker.io/library/debian:sid
-    steps:
-    - name: Checkout Source
-      uses: actions/checkout@v2
-    - name: Update repository
-      run: apt-get update -y
-    - name: Install the basic dev packages
-      run: apt-get install -y equivs curl git devscripts lintian build-essential automake autotools-dev cmake g++
-    - name: Install build dependencies
-      run: mk-build-deps -i -t "apt-get --yes" -r
-    - name: Build Package
-      run: dpkg-buildpackage -b -uc -us -j$(nproc)
+  build:
+    runs-on: ubuntu-22.04
 
-  ubuntu:
-    name: Ubuntu
-    runs-on: ubuntu-latest
     steps:
-    - name: Checkout Source
-      uses: actions/checkout@v2
-    - name: Update repository
-      run: sudo apt-get update -y
-    - name: Install the basic dev packages
-      run: sudo apt-get install -y equivs curl git devscripts lintian build-essential automake autotools-dev cmake g++
-    - name: Install build dependencies
-      run: sudo mk-build-deps -i -t "apt-get --yes" -r
-    - name: Build Package
-      run: dpkg-buildpackage -b -uc -us -j$(nproc)
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository universe
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config git wget \
+            qtbase5-dev qtdeclarative5-dev qtquickcontrols2-5-dev \
+            qtbase5-private-dev qttools5-dev qttools5-dev-tools \
+            libqt5x11extras5-dev libkf5windowsystem-dev \
+            libxcb1-dev libxcb-shape0-dev libxcb-icccm4-dev \
+            libkf5networkmanagerqt-dev libkf5screen-dev \
+            libkf5bluezqt-dev libkf5kio-dev \
+            modemmanager-qt-dev libqt5sensors5-dev \
+            libcanberra-dev libpulse-dev libcanberra-pulse \
+            extra-cmake-modules imagemagick patchelf
+
+      # ------------------------------------------------------------
+      # Build FishUI
+      # ------------------------------------------------------------
+      - name: Build FishUI
+        run: |
+          git clone https://github.com/cutefishos/fishui.git
+          cd fishui
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          make -j$(nproc)
+          make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
+
+      # ------------------------------------------------------------
+      # Build libcutefish / System Library
+      # ------------------------------------------------------------
+      - name: Build Cutefish System Library
+        run: |
+          git clone https://github.com/cutefishos/libcutefish.git
+          cd libcutefish
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          make -j$(nproc)
+          make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
+
+      # ------------------------------------------------------------
+      # Build Dock
+      # ------------------------------------------------------------
+      - name: Build Cutefish Dock
+        run: |
+          git clone https://github.com/cutefishos/dock.git
+          cd dock
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          make -j$(nproc)
+          make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
+
+          # Ensure binary is in usr/bin
+          mkdir -p $GITHUB_WORKSPACE/build/AppDir/usr/bin
+          cp $GITHUB_WORKSPACE/build/AppDir/usr/lib/cutefish-dock/cutefish-dock \
+             $GITHUB_WORKSPACE/build/AppDir/usr/bin/cutefish-dock || true
+
+      # ------------------------------------------------------------
+      # Desktop file & icon
+      # ------------------------------------------------------------
+      - name: Create .desktop file and icon
+        run: |
+          mkdir -p build/AppDir/usr/share/applications
+          mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cat > build/AppDir/usr/share/applications/cutefish-dock.desktop <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Cutefish Dock
+          Exec=cutefish-dock
+          Icon=cutefish-dock
+          Categories=Utility;Desktop;
+          Terminal=false
+          EOF
+
+          convert -size 256x256 xc:none \
+            build/AppDir/usr/share/icons/hicolor/256x256/apps/cutefish-dock.png || true
+
+      # ------------------------------------------------------------
+      # linuxdeployqt
+      # ------------------------------------------------------------
+      - name: Download linuxdeployqt
+        run: |
+          wget -O linuxdeployqt.AppImage \
+            https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt.AppImage
+
+      # ------------------------------------------------------------
+      # Create AppImage
+      # ------------------------------------------------------------
+      - name: Build AppImage
+        run: |
+          cd build/AppDir
+          export QT_QPA_PLATFORM=xcb
+          export QT_QUICK_CONTROLS_STYLE=FishUI
+
+          ../../linuxdeployqt.AppImage \
+            usr/share/applications/cutefish-dock.desktop \
+            -qmlimport=/usr/lib/x86_64-linux-gnu/qt5/qml \
+            -appimage
+
+      # ------------------------------------------------------------
+      # Upload
+      # ------------------------------------------------------------
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cutefish-Dock.AppImage
+          path: build/AppDir/*.AppImage
