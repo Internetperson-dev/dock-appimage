@@ -1,4 +1,4 @@
-name: Build Cutefish Dock AppImage (Verbose)
+name: Build Cutefish Dock AppImage (Verbose, Screen Disabled)
 
 on:
   push:
@@ -13,11 +13,14 @@ jobs:
       MAKEFLAGS: "-j2"
 
     steps:
+      # ------------------------------------------------------------
+      # Checkout
+      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v3
 
       # ------------------------------------------------------------
-      # System info (very useful for debugging)
+      # System info (for logs)
       # ------------------------------------------------------------
       - name: Print system info
         run: |
@@ -26,8 +29,8 @@ jobs:
           lsb_release -a || true
           free -h
           df -h
-          cmake --version
           gcc --version
+          cmake --version
           qmake --version || true
 
       # ------------------------------------------------------------
@@ -35,7 +38,7 @@ jobs:
       # ------------------------------------------------------------
       - name: Install build dependencies
         run: |
-          set -x
+          set -ex
           sudo add-apt-repository universe
           sudo apt-get update
           sudo apt-get install -y \
@@ -53,16 +56,16 @@ jobs:
             extra-cmake-modules imagemagick patchelf
 
       # ------------------------------------------------------------
-      # Prepare AppDir layout early
+      # Prepare AppDir
       # ------------------------------------------------------------
       - name: Prepare AppDir
         run: |
-          set -x
+          set -ex
           mkdir -p build/AppDir/usr/{bin,lib,share}
           mkdir -p build/AppDir/usr/lib/qt5/{plugins,qml}
 
       # ------------------------------------------------------------
-      # Build FishUI (VERBOSE)
+      # Build FishUI
       # ------------------------------------------------------------
       - name: Build FishUI (verbose)
         run: |
@@ -77,13 +80,23 @@ jobs:
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
       # ------------------------------------------------------------
-      # Build libcutefish / system library (VERBOSE)
+      # Build libcutefish (SCREEN MODULE DISABLED)
       # ------------------------------------------------------------
-      - name: Build libcutefish (verbose)
+      - name: Build libcutefish (screen disabled, verbose)
         run: |
           set -ex
           git clone https://github.com/cutefishos/libcutefish.git
           cd libcutefish
+
+          echo "=== Original CMakeLists.txt (top) ==="
+          sed -n '1,200p' CMakeLists.txt
+
+          echo "=== Disabling screen module (KScreen API mismatch fix) ==="
+          sed -i 's/add_subdirectory(screen)//g' CMakeLists.txt
+
+          echo "=== Remaining subdirectories ==="
+          grep add_subdirectory CMakeLists.txt || true
+
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
@@ -92,7 +105,7 @@ jobs:
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
       # ------------------------------------------------------------
-      # Build Dock (VERBOSE)
+      # Build Dock
       # ------------------------------------------------------------
       - name: Build Cutefish Dock (verbose)
         run: |
@@ -106,8 +119,7 @@ jobs:
           make VERBOSE=1
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
-          # Ensure executable is reachable
-          mkdir -p $GITHUB_WORKSPACE/build/AppDir/usr/bin
+          echo "=== Installed dock binaries ==="
           find $GITHUB_WORKSPACE/build/AppDir -type f -executable -name "*dock*" -print
 
       # ------------------------------------------------------------
@@ -115,7 +127,7 @@ jobs:
       # ------------------------------------------------------------
       - name: Create desktop entry
         run: |
-          set -x
+          set -ex
           mkdir -p build/AppDir/usr/share/applications
           mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
 
@@ -137,15 +149,15 @@ jobs:
       # ------------------------------------------------------------
       - name: Download linuxdeployqt
         run: |
-          set -x
+          set -ex
           wget -O linuxdeployqt.AppImage \
             https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt.AppImage
 
       # ------------------------------------------------------------
-      # AppImage build (verbose)
+      # Build AppImage
       # ------------------------------------------------------------
-      - name: Build AppImage
+      - name: Build AppImage (verbose)
         run: |
           set -ex
           cd build/AppDir
