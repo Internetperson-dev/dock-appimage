@@ -33,7 +33,7 @@ jobs:
     # ----------------------------
     # Build FishUI
     # ----------------------------
-    - name: Build FishUI (verbose)
+    - name: Build FishUI
       run: |
         set -ex
         git clone https://github.com/cutefishos/fishui.git
@@ -44,19 +44,14 @@ jobs:
         make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
     # ----------------------------
-    # Build libcutefish (screen module disabled)
+    # Build libcutefish (screen disabled)
     # ----------------------------
-    - name: Build libcutefish (screen disabled)
+    - name: Build libcutefish
       run: |
         set -ex
         git clone https://github.com/cutefishos/libcutefish.git
         cd libcutefish
-
-        echo "==== Patching CMakeLists.txt (disable screen module) ===="
-        sed -n '1,200p' CMakeLists.txt
         sed -i 's/add_subdirectory(screen)//g' CMakeLists.txt
-        grep add_subdirectory CMakeLists.txt || true
-
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
         make VERBOSE=1
@@ -116,10 +111,11 @@ jobs:
 
         export QT_QPA_PLATFORM=xcb
         export QT_STYLE_OVERRIDE=fusion
+        export QML2_IMPORT_PATH=/usr/lib/x86_64-linux-gnu/qt5/qml
 
         ../linuxdeployqt-continuous-x86_64.AppImage \
           usr/share/applications/cutefish-dock.desktop \
-          -qmldir=/usr/lib/qt5/qml \
+          -qmldir=/usr/lib/x86_64-linux-gnu/qt5/qml \
           -verbose=2 \
           -appimage
 
