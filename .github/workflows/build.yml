@@ -1,27 +1,49 @@
-name: Build Cutefish Dock AppImage
+name: Build Cutefish Dock AppImage (Verbose)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
+    env:
+      MAKEFLAGS: "-j2"
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      # ------------------------------------------------------------
+      # System info (very useful for debugging)
+      # ------------------------------------------------------------
+      - name: Print system info
         run: |
+          set -x
+          uname -a
+          lsb_release -a || true
+          free -h
+          df -h
+          cmake --version
+          gcc --version
+          qmake --version || true
+
+      # ------------------------------------------------------------
+      # Dependencies
+      # ------------------------------------------------------------
+      - name: Install build dependencies
+        run: |
+          set -x
           sudo add-apt-repository universe
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake pkg-config git wget \
-            qtbase5-dev qtdeclarative5-dev qtquickcontrols2-5-dev \
-            qtbase5-private-dev qttools5-dev qttools5-dev-tools \
+            qtbase5-dev qtbase5-private-dev \
+            qtdeclarative5-dev qtquickcontrols2-5-dev \
+            qttools5-dev qttools5-dev-tools \
+            qtmultimedia5-dev libqt5multimedia5-plugins \
             libqt5x11extras5-dev libkf5windowsystem-dev \
             libxcb1-dev libxcb-shape0-dev libxcb-icccm4-dev \
             libkf5networkmanagerqt-dev libkf5screen-dev \
@@ -31,57 +53,69 @@ jobs:
             extra-cmake-modules imagemagick patchelf
 
       # ------------------------------------------------------------
-      # Build FishUI
+      # Prepare AppDir layout early
       # ------------------------------------------------------------
-      - name: Build FishUI
+      - name: Prepare AppDir
         run: |
+          set -x
+          mkdir -p build/AppDir/usr/{bin,lib,share}
+          mkdir -p build/AppDir/usr/lib/qt5/{plugins,qml}
+
+      # ------------------------------------------------------------
+      # Build FishUI (VERBOSE)
+      # ------------------------------------------------------------
+      - name: Build FishUI (verbose)
+        run: |
+          set -ex
           git clone https://github.com/cutefishos/fishui.git
           cd fishui
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr
-          make -j$(nproc)
+          make VERBOSE=1
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
       # ------------------------------------------------------------
-      # Build libcutefish / System Library
+      # Build libcutefish / system library (VERBOSE)
       # ------------------------------------------------------------
-      - name: Build Cutefish System Library
+      - name: Build libcutefish (verbose)
         run: |
+          set -ex
           git clone https://github.com/cutefishos/libcutefish.git
           cd libcutefish
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr
-          make -j$(nproc)
+          make VERBOSE=1
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
       # ------------------------------------------------------------
-      # Build Dock
+      # Build Dock (VERBOSE)
       # ------------------------------------------------------------
-      - name: Build Cutefish Dock
+      - name: Build Cutefish Dock (verbose)
         run: |
+          set -ex
           git clone https://github.com/cutefishos/dock.git
           cd dock
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr
-          make -j$(nproc)
+          make VERBOSE=1
           make DESTDIR=$GITHUB_WORKSPACE/build/AppDir install
 
-          # Ensure binary is in usr/bin
+          # Ensure executable is reachable
           mkdir -p $GITHUB_WORKSPACE/build/AppDir/usr/bin
-          cp $GITHUB_WORKSPACE/build/AppDir/usr/lib/cutefish-dock/cutefish-dock \
-             $GITHUB_WORKSPACE/build/AppDir/usr/bin/cutefish-dock || true
+          find $GITHUB_WORKSPACE/build/AppDir -type f -executable -name "*dock*" -print
 
       # ------------------------------------------------------------
-      # Desktop file & icon
+      # Desktop file + icon
       # ------------------------------------------------------------
-      - name: Create .desktop file and icon
+      - name: Create desktop entry
         run: |
+          set -x
           mkdir -p build/AppDir/usr/share/applications
           mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
 
@@ -103,15 +137,17 @@ jobs:
       # ------------------------------------------------------------
       - name: Download linuxdeployqt
         run: |
+          set -x
           wget -O linuxdeployqt.AppImage \
             https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt.AppImage
 
       # ------------------------------------------------------------
-      # Create AppImage
+      # AppImage build (verbose)
       # ------------------------------------------------------------
       - name: Build AppImage
         run: |
+          set -ex
           cd build/AppDir
           export QT_QPA_PLATFORM=xcb
           export QT_QUICK_CONTROLS_STYLE=FishUI
@@ -119,12 +155,13 @@ jobs:
           ../../linuxdeployqt.AppImage \
             usr/share/applications/cutefish-dock.desktop \
             -qmlimport=/usr/lib/x86_64-linux-gnu/qt5/qml \
+            -verbose=2 \
             -appimage
 
       # ------------------------------------------------------------
-      # Upload
+      # Upload artifact
       # ------------------------------------------------------------
-      - name: Upload AppImage artifact
+      - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
           name: Cutefish-Dock.AppImage
