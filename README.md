@@ -1,6 +1,6 @@
 # Dock
 
-CutefishOS application dock.
+CutefishOS application dock. 
 
 ## Dependencies
 
