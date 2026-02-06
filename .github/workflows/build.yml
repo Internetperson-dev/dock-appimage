@@ -30,7 +30,7 @@ jobs:
           git clone https://github.com/cutefishos/fishui.git
           cd fishui
           mkdir build && cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX:PATH=/usr
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr
           make -j$(nproc)
           sudo make install
           echo "FishUI built and installed"
@@ -39,15 +39,11 @@ jobs:
         run: |
           mkdir -p build
           cd build
+          # Install everything inside AppDir
           cmake .. -DCMAKE_INSTALL_PREFIX=AppDir/usr -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           make install
-          make DESTDIR=AppDir install
-          mkdir -p AppDir/usr/bin
-          #cp AppDir/cutefish-dock/cutefish-dock AppDir/usr/bin/cutefish-dock
-          echo "Cutefish Dock binary copied"
-
-
+          echo "Cutefish Dock installed into AppDir"
 
       - name: Create desktop file and icon
         run: |
@@ -75,18 +71,14 @@ jobs:
         run: |
           QML_SRC=/usr/lib/x86_64-linux-gnu/qt5/qml
           QML_DST=build/AppDir/usr/lib/qt5/qml
-
           mkdir -p "$QML_DST"
-
           echo "Copying Qt QML modules..."
           cp -r "$QML_SRC/QtQuick" "$QML_DST/"
           cp -r "$QML_SRC/QtQuick/Controls.2" "$QML_DST/QtQuick/"
           cp -r "$QML_SRC/QtQuick/Layouts" "$QML_DST/QtQuick/"
           cp -r "$QML_SRC/QtGraphicalEffects" "$QML_DST/"
-
           echo "Copying FishUI QML..."
           cp -r "$QML_SRC/FishUI" "$QML_DST/"
-
           echo "Bundled QML tree:"
           find "$QML_DST" -maxdepth 3 -type d
 
@@ -100,7 +92,7 @@ jobs:
           QT_QUICK_CONTROLS_STYLE=Basic
           EOF
 
-      - name: Build AppImage with all libraries
+      - name: Build AppImage
         run: |
           cd build/AppDir
           export QT_QPA_PLATFORM=xcb
