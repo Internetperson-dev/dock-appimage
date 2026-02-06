@@ -20,7 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             cmake g++ qtbase5-dev qttools5-dev qtdeclarative5-dev \
-            qtquickcontrols2-5-dev qtgraphicaleffects5-dev \
+            qtquickcontrols2-5-dev \
             libqt5x11extras5-dev libkf5windowsystem-dev \
             libkf5networkmanagerqt-dev \
             libnm-dev libpulse-dev libcanberra-dev \
