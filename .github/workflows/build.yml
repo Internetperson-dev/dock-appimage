@@ -23,7 +23,6 @@ jobs:
             qttools5-dev qttools5-dev-tools \
             qtdeclarative5-dev \
             qtquickcontrols2-5-dev \
-            qtgraphicaleffects5-dev \
             libqt5x11extras5-dev \
             libkf5windowsystem-dev \
             libkf5networkmanagerqt-dev \
@@ -40,7 +39,6 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=/usr
           make -j$(nproc)
           sudo make install
-          echo "FishUI installed to system"
 
       - name: Build Cutefish Dock
         run: |
@@ -51,9 +49,6 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=/usr
           make -j$(nproc)
           make DESTDIR=AppDir install
-
-          mkdir -p AppDir/usr/bin
-          cp AppDir/usr/bin/cutefish-dock AppDir/usr/bin/cutefish-dock || true
 
       - name: Create desktop file and icon
         run: |
@@ -78,15 +73,6 @@ jobs:
           wget -O build/linuxdeployqt/linuxdeployqt.AppImage \
             https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x build/linuxdeployqt/linuxdeployqt.AppImage
-
-      - name: Create AppRun environment
-        run: |
-          cat > build/AppDir/AppRun.env <<'EOF'
-          QT_QPA_PLATFORM=xcb
-          QT_PLUGIN_PATH=$APPDIR/usr/lib/qt5/plugins
-          QML2_IMPORT_PATH=$APPDIR/usr/lib/qt5/qml
-          QT_QUICK_CONTROLS_STYLE=Basic
-          EOF
 
       - name: Build AppImage
         run: |
