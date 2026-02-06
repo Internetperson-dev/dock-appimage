@@ -22,7 +22,7 @@ jobs:
             cmake g++ qtbase5-dev qttools5-dev qtdeclarative5-dev \
             qtquickcontrols2-5-dev qtgraphicaleffects5-dev \
             libqt5x11extras5-dev libkf5windowsystem-dev \
-            libkf5networkmanagerqt-dev libkf5modemmanagerqt-dev \
+            libkf5networkmanagerqt-dev \
             libnm-dev libpulse-dev libcanberra-dev \
             extra-cmake-modules make pkg-config wget git imagemagick zip patchelf
 
