@@ -2,8 +2,7 @@ name: Build Cutefish Dock AppImage
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -11,12 +10,11 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      # -------------------------
+      # --------------------------
       # Install Dependencies
-      # -------------------------
+      # --------------------------
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -29,11 +27,12 @@ jobs:
             libnm-dev libpulse-dev libcanberra-dev \
             extra-cmake-modules imagemagick \
             libxcb-shape0-dev libxcb-icccm4-dev \
-            libxcb-render-util0-dev libxcb-xfixes0-dev
+            libxcb-render-util0-dev libxcb-xfixes0-dev \
+            squashfs-tools
 
-      # -------------------------
+      # --------------------------
       # Build FishUI
-      # -------------------------
+      # --------------------------
       - name: Build FishUI
         run: |
           git clone https://github.com/cutefishos/fishui.git
@@ -43,9 +42,9 @@ jobs:
           make -j$(nproc)
           sudo make install
 
-      # -------------------------
+      # --------------------------
       # Build Dock
-      # -------------------------
+      # --------------------------
       - name: Build Dock
         run: |
           mkdir build
@@ -54,14 +53,12 @@ jobs:
           make -j$(nproc)
           make DESTDIR=$PWD/AppDir install
 
-      # -------------------------
-      # Desktop + Icon
-      # -------------------------
-      - name: Desktop + Icon
+      # --------------------------
+      # Desktop File
+      # --------------------------
+      - name: Desktop file
         run: |
           mkdir -p build/AppDir/usr/share/applications
-          mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
-
           cat << EOF > build/AppDir/usr/share/applications/cutefish-dock.desktop
           [Desktop Entry]
           Type=Application
@@ -71,72 +68,63 @@ jobs:
           Categories=Utility;
           EOF
 
-          convert -size 256x256 xc:none \
-            build/AppDir/usr/share/icons/hicolor/256x256/apps/cutefish-dock.png || true
-
-      # -------------------------
-      # Copy ALL Qt QML Modules
-      # -------------------------
-      - name: Bundle QML modules
-        run: |
-          QML_SRC=/usr/lib/x86_64-linux-gnu/qt5/qml
-          QML_DST=build/AppDir/usr/lib/qt5/qml
-
-          mkdir -p "$QML_DST"
-
-          echo "Copying full Qt5 QML tree..."
-          cp -r "$QML_SRC/"* "$QML_DST/"
-
-          echo "QML modules bundled:"
-          ls "$QML_DST"
-
-      # -------------------------
+      # --------------------------
       # Download linuxdeployqt
-      # -------------------------
+      # --------------------------
       - name: Download linuxdeployqt
         run: |
-          mkdir -p build/linuxdeployqt
-          wget -O build/linuxdeployqt/linuxdeployqt.AppImage \
-            https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
-          chmod +x build/linuxdeployqt/linuxdeployqt.AppImage
+          wget https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt-continuous-x86_64.AppImage
 
-      # -------------------------
-      # Create AppRun (FORCE XCB)
-      # -------------------------
-      - name: Create AppRun
+      # --------------------------
+      # Build initial AppImage
+      # --------------------------
+      - name: Build AppImage
         run: |
-          cat << 'EOF' > build/AppDir/AppRun
+          cd build/AppDir
+          ../../linuxdeployqt-continuous-x86_64.AppImage \
+            usr/share/applications/cutefish-dock.desktop \
+            -bundle-non-qt-libs \
+            -qmldir=../../ \
+            -extra-plugins=platforms/libqxcb.so \
+            -verbose=2 \
+            -appimage
+
+      # --------------------------
+      # Extract and Patch AppRun
+      # --------------------------
+      - name: Patch AppRun
+        run: |
+          cd build/AppDir
+          APPIMAGE=$(ls *.AppImage)
+
+          ./$APPIMAGE --appimage-extract
+
+          cd squashfs-root
+
+          rm AppRun
+
+          cat << 'EOF' > AppRun
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "${0}")")"
 
           export QT_QPA_PLATFORM=xcb
           export QT_PLUGIN_PATH="$HERE/usr/plugins"
-          export QML2_IMPORT_PATH="$HERE/usr/lib/qt5/qml"
+          export QML2_IMPORT_PATH="$HERE/usr/qml:$HERE/usr/lib/qt5/qml"
           export QT_QUICK_CONTROLS_STYLE=Basic
 
           exec "$HERE/usr/bin/cutefish-dock" "$@"
           EOF
 
-          chmod +x build/AppDir/AppRun
+          chmod +x AppRun
 
-      # -------------------------
-      # Bundle Libraries
-      # -------------------------
-      - name: Bundle libraries
-        run: |
-          cd build/AppDir
-          ../linuxdeployqt/linuxdeployqt.AppImage \
-            usr/share/applications/cutefish-dock.desktop \
-            -bundle-non-qt-libs \
-            -extra-plugins=platforms/libqxcb.so \
-            -verbose=2 \
-            -appimage
+          mksquashfs . ../Cutefish_Dock_FIXED-x86_64.AppImage -noappend
+          chmod +x ../Cutefish_Dock_FIXED-x86_64.AppImage
 
-      # -------------------------
-      # Upload Artifact
-      # -------------------------
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+      # --------------------------
+      # Upload
+      # --------------------------
+      - uses: actions/upload-artifact@v4
         with:
-          name: Cutefish_Dock.AppImage
-          path: build/AppDir/*.AppImage
+          name: Cutefish_Dock_FIXED
+          path: build/AppDir/Cutefish_Dock_FIXED-x86_64.AppImage
