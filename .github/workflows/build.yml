@@ -23,7 +23,7 @@ jobs:
             libkf5networkmanagerqt-dev libnm-dev libpulse-dev libcanberra-dev \
             extra-cmake-modules make pkg-config wget git imagemagick zip patchelf \
             libxcb-shape0-dev libxcb-icccm4-dev libxcb-render-util0-dev \
-            libxcb-xfixes0-dev
+            libxcb-xfixes0-dev qtbase5-private-dev
 
       - name: Build FishUI
         run: |
