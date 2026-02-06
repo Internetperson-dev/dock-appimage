@@ -39,12 +39,15 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_BUILD_TYPE=Release
+          cmake .. -DCMAKE_INSTALL_PREFIX=AppDir/usr -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
+          make install
           make DESTDIR=AppDir install
           mkdir -p AppDir/usr/bin
-          cp AppDir/cutefish-dock/cutefish-dock AppDir/usr/bin/cutefish-dock
+          #cp AppDir/cutefish-dock/cutefish-dock AppDir/usr/bin/cutefish-dock
           echo "Cutefish Dock binary copied"
+
+
 
       - name: Create desktop file and icon
         run: |
