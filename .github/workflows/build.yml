@@ -54,19 +54,32 @@ jobs:
           make DESTDIR=$PWD/AppDir install
 
       # --------------------------
-      # Desktop File
+      # Fix AppDir Structure
       # --------------------------
-      - name: Desktop file
+      - name: Prepare AppDir
         run: |
           mkdir -p build/AppDir/usr/share/applications
+          mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
+
+      # --------------------------
+      # Desktop + Icon
+      # --------------------------
+      - name: Desktop and icon
+        run: |
           cat << EOF > build/AppDir/usr/share/applications/cutefish-dock.desktop
           [Desktop Entry]
           Type=Application
           Name=Cutefish Dock
+          Comment=Lightweight dock for Cutefish Desktop
           Exec=cutefish-dock
           Icon=cutefish-dock
           Categories=Utility;
+          Terminal=false
           EOF
+
+          # Create proper icon inside hicolor theme
+          convert -size 256x256 xc:skyblue \
+            build/AppDir/usr/share/icons/hicolor/256x256/apps/cutefish-dock.png
 
       # --------------------------
       # Download linuxdeployqt
@@ -77,11 +90,12 @@ jobs:
           chmod +x linuxdeployqt-continuous-x86_64.AppImage
 
       # --------------------------
-      # Build initial AppImage
+      # Build AppImage
       # --------------------------
       - name: Build AppImage
         run: |
           cd build/AppDir
+
           ../../linuxdeployqt-continuous-x86_64.AppImage \
             usr/share/applications/cutefish-dock.desktop \
             -bundle-non-qt-libs \
@@ -91,40 +105,9 @@ jobs:
             -appimage
 
       # --------------------------
-      # Extract and Patch AppRun
-      # --------------------------
-      - name: Patch AppRun
-        run: |
-          cd build/AppDir
-          APPIMAGE=$(ls *.AppImage)
-
-          ./$APPIMAGE --appimage-extract
-
-          cd squashfs-root
-
-          rm AppRun
-
-          cat << 'EOF' > AppRun
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-
-          export QT_QPA_PLATFORM=xcb
-          export QT_PLUGIN_PATH="$HERE/usr/plugins"
-          export QML2_IMPORT_PATH="$HERE/usr/qml:$HERE/usr/lib/qt5/qml"
-          export QT_QUICK_CONTROLS_STYLE=Basic
-
-          exec "$HERE/usr/bin/cutefish-dock" "$@"
-          EOF
-
-          chmod +x AppRun
-
-          mksquashfs . ../Cutefish_Dock_FIXED-x86_64.AppImage -noappend
-          chmod +x ../Cutefish_Dock_FIXED-x86_64.AppImage
-
-      # --------------------------
-      # Upload
+      # Upload Artifact
       # --------------------------
       - uses: actions/upload-artifact@v4
         with:
-          name: Cutefish_Dock_FIXED
-          path: build/AppDir/Cutefish_Dock_FIXED-x86_64.AppImage
+          name: Cutefish_Dock
+          path: build/AppDir/*.AppImage
