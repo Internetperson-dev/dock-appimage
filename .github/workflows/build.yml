@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
 
-      # -----------------------------
+      # -------------------------
       # Install Dependencies
-      # -----------------------------
+      # -------------------------
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -31,67 +31,68 @@ jobs:
             libxcb-shape0-dev libxcb-icccm4-dev \
             libxcb-render-util0-dev libxcb-xfixes0-dev
 
-      # -----------------------------
+      # -------------------------
       # Build FishUI
-      # -----------------------------
+      # -------------------------
       - name: Build FishUI
         run: |
           git clone https://github.com/cutefishos/fishui.git
           cd fishui
           mkdir build && cd build
-
-          cmake .. \
-            -DCMAKE_INSTALL_PREFIX=/usr \
-            -DCMAKE_BUILD_TYPE=Release
-
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           sudo make install
 
-          echo "FishUI installed"
-
-      # -----------------------------
-      # Build Cutefish Dock
-      # -----------------------------
-      - name: Build Cutefish Dock
+      # -------------------------
+      # Build Dock
+      # -------------------------
+      - name: Build Dock
         run: |
           mkdir build
           cd build
-
-          cmake .. \
-            -DCMAKE_INSTALL_PREFIX=/usr \
-            -DCMAKE_BUILD_TYPE=Release
-
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
-
-          # IMPORTANT: Use DESTDIR so /etc does NOT install to system
           make DESTDIR=$PWD/AppDir install
 
-          echo "AppDir structure:"
-          find AppDir -maxdepth 3 -type d
-
-      # -----------------------------
-      # Create Desktop File + Icon
-      # -----------------------------
-      - name: Create desktop file and icon
+      # -------------------------
+      # Desktop + Icon
+      # -------------------------
+      - name: Desktop + Icon
         run: |
           mkdir -p build/AppDir/usr/share/applications
           mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
 
-          DESKTOP_FILE=build/AppDir/usr/share/applications/cutefish-dock.desktop
-
-          echo "[Desktop Entry]" > "$DESKTOP_FILE"
-          echo "Type=Application" >> "$DESKTOP_FILE"
-          echo "Name=Cutefish Dock" >> "$DESKTOP_FILE"
-          echo "Exec=cutefish-dock" >> "$DESKTOP_FILE"
-          echo "Icon=cutefish-dock" >> "$DESKTOP_FILE"
-          echo "Categories=Utility;" >> "$DESKTOP_FILE"
+          cat << EOF > build/AppDir/usr/share/applications/cutefish-dock.desktop
+          [Desktop Entry]
+          Type=Application
+          Name=Cutefish Dock
+          Exec=cutefish-dock
+          Icon=cutefish-dock
+          Categories=Utility;
+          EOF
 
           convert -size 256x256 xc:none \
             build/AppDir/usr/share/icons/hicolor/256x256/apps/cutefish-dock.png || true
 
-      # -----------------------------
+      # -------------------------
+      # Copy ALL Qt QML Modules
+      # -------------------------
+      - name: Bundle QML modules
+        run: |
+          QML_SRC=/usr/lib/x86_64-linux-gnu/qt5/qml
+          QML_DST=build/AppDir/usr/lib/qt5/qml
+
+          mkdir -p "$QML_DST"
+
+          echo "Copying full Qt5 QML tree..."
+          cp -r "$QML_SRC/"* "$QML_DST/"
+
+          echo "QML modules bundled:"
+          ls "$QML_DST"
+
+      # -------------------------
       # Download linuxdeployqt
-      # -----------------------------
+      # -------------------------
       - name: Download linuxdeployqt
         run: |
           mkdir -p build/linuxdeployqt
@@ -99,27 +100,41 @@ jobs:
             https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x build/linuxdeployqt/linuxdeployqt.AppImage
 
-      # -----------------------------
-      # Bundle Qt + QML Properly
-      # -----------------------------
-      - name: Bundle Qt and QML
+      # -------------------------
+      # Create AppRun (FORCE XCB)
+      # -------------------------
+      - name: Create AppRun
         run: |
-          cd build/AppDir
+          cat << 'EOF' > build/AppDir/AppRun
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
 
           export QT_QPA_PLATFORM=xcb
-          export QML2_IMPORT_PATH=/usr/lib/x86_64-linux-gnu/qt5/qml
+          export QT_PLUGIN_PATH="$HERE/usr/plugins"
+          export QML2_IMPORT_PATH="$HERE/usr/lib/qt5/qml"
+          export QT_QUICK_CONTROLS_STYLE=Basic
 
+          exec "$HERE/usr/bin/cutefish-dock" "$@"
+          EOF
+
+          chmod +x build/AppDir/AppRun
+
+      # -------------------------
+      # Bundle Libraries
+      # -------------------------
+      - name: Bundle libraries
+        run: |
+          cd build/AppDir
           ../linuxdeployqt/linuxdeployqt.AppImage \
             usr/share/applications/cutefish-dock.desktop \
-            -qmldir=../../ \
-            -extra-plugins=platforms/libqxcb.so \
             -bundle-non-qt-libs \
+            -extra-plugins=platforms/libqxcb.so \
             -verbose=2 \
             -appimage
 
-      # -----------------------------
+      # -------------------------
       # Upload Artifact
-      # -----------------------------
+      # -------------------------
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
