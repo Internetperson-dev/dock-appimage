@@ -27,8 +27,13 @@ jobs:
             libkf5windowsystem-dev \
             libkf5networkmanagerqt-dev \
             libnm-dev \
-            extra-cmake-modules
-
+            extra-cmake-modules \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxcb-render0-dev \
+            libxcb-render-util0-dev \
+            libxcb-composite0-dev
+      
       - name: Build FishUI
         run: |
           git clone https://github.com/cutefishos/fishui.git
