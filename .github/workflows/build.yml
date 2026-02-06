@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout code
+      - name: Checkout source
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo add-apt-repository universe
           sudo apt-get update
@@ -32,35 +32,47 @@ jobs:
             libxcb-xfixes0-dev \
             libxcb-render0-dev \
             libxcb-render-util0-dev \
-            libxcb-composite0-dev libxcb-icccm4-dev
-      
+            libxcb-composite0-dev \
+            libxcb-icccm4-dev
+
+      # ------------------------------------------------------------
+      # Build & install FishUI (required QML + C++ lib)
+      # ------------------------------------------------------------
       - name: Build FishUI
         run: |
           git clone https://github.com/cutefishos/fishui.git
           cd fishui
           mkdir build && cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr
           make -j$(nproc)
           sudo make install
 
+          echo "Installed FishUI QML:"
+          ls /usr/lib/x86_64-linux-gnu/qt5/qml/FishUI
+
+      # ------------------------------------------------------------
+      # Build Cutefish Dock into AppDir
+      # ------------------------------------------------------------
       - name: Build Cutefish Dock
         run: |
-          mkdir -p build
+          mkdir build
           cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr
+          cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           make DESTDIR=AppDir install
 
+          mkdir -p AppDir/usr/bin
+          cp AppDir/usr/bin/cutefish-dock AppDir/usr/bin/cutefish-dock || true
+
+      # ------------------------------------------------------------
+      # Desktop file + icon
+      # ------------------------------------------------------------
       - name: Create desktop file and icon
         run: |
           mkdir -p build/AppDir/usr/share/applications
           mkdir -p build/AppDir/usr/share/icons/hicolor/256x256/apps
 
-          cat > build/AppDir/usr/share/applications/cutefish-dock.desktop <<EOF
+          cat > build/AppDir/usr/share/applications/cutefish-dock.desktop << EOF
           [Desktop Entry]
           Type=Application
           Name=Cutefish Dock
@@ -72,6 +84,32 @@ jobs:
           convert -size 256x256 xc:none \
             build/AppDir/usr/share/icons/hicolor/256x256/apps/cutefish-dock.png
 
+      # ------------------------------------------------------------
+      # Explicitly bundle ALL required QML modules
+      # ------------------------------------------------------------
+      - name: Bundle Qt & FishUI QML modules
+        run: |
+          QML_SRC=/usr/lib/x86_64-linux-gnu/qt5/qml
+          QML_DST=build/AppDir/usr/lib/qt5/qml
+
+          mkdir -p "$QML_DST"
+
+          echo "Copying Qt QML modules..."
+          cp -r "$QML_SRC/QtQuick" "$QML_DST/"
+          cp -r "$QML_SRC/QtQuick.2" "$QML_DST/"
+          cp -r "$QML_SRC/QtQuick/Controls.2" "$QML_DST/QtQuick/"
+          cp -r "$QML_SRC/QtQuick/Layouts" "$QML_DST/QtQuick/"
+          cp -r "$QML_SRC/QtGraphicalEffects" "$QML_DST/"
+
+          echo "Copying FishUI QML..."
+          cp -r "$QML_SRC/FishUI" "$QML_DST/"
+
+          echo "Bundled QML tree:"
+          find "$QML_DST" -maxdepth 3 -type d
+
+      # ------------------------------------------------------------
+      # Download linuxdeployqt
+      # ------------------------------------------------------------
       - name: Download linuxdeployqt
         run: |
           mkdir -p build/linuxdeployqt
@@ -79,6 +117,9 @@ jobs:
             https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x build/linuxdeployqt/linuxdeployqt.AppImage
 
+      # ------------------------------------------------------------
+      # Build AppImage
+      # ------------------------------------------------------------
       - name: Build AppImage
         run: |
           cd build/AppDir
@@ -94,7 +135,10 @@ jobs:
             -verbose=2 \
             -appimage
 
-      - name: Upload AppImage artifact
+      # ------------------------------------------------------------
+      # Upload artifact
+      # ------------------------------------------------------------
+      - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
           name: Cutefish_Dock.AppImage
